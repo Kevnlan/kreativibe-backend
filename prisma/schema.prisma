@@ -1,0 +1,642 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  CREATOR
+  BRAND
+  ADMIN
+  SUPPORT_AGENT
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum ExternalVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum ContentType {
+  VIDEO
+  IMAGE
+  AUDIO
+  BRAND_ASSET
+}
+
+enum ContentStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SOLD
+  ARCHIVED
+}
+
+enum ContentPlatform {
+  TIKTOK
+  INSTAGRAM
+  FACEBOOK
+  YOUTUBE
+  X
+  RADIO
+  PRINT
+  GENERAL
+}
+
+enum ModerationStatus {
+  QUEUED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum OfferStatus {
+  PENDING
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum PaymentMethod {
+  MPESA
+  CARD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  PENDING_APPROVAL
+  APPROVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransactionType {
+  TOPUP
+  PURCHASE
+  COMMISSION
+  PAYOUT
+  REFUND
+  ADJUSTMENT
+  TAX_DEDUCTION
+}
+
+// ─── Module 1 — Country ───────────────────────────────────────────────────────
+
+model Country {
+  id             String  @id // "KE", "UG", "TZ"
+  name           String
+  currency       String // "KES", "UGX", "TZS"
+  currencySymbol String // "Ksh", "USh", "TSh"
+  isActive       Boolean @default(false)
+
+  users      User[]
+  taxConfigs CountryTaxConfig[]
+
+  @@map("countries")
+}
+
+// ─── Module 2 — Users & Auth ──────────────────────────────────────────────────
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  name            String
+  role            Role     @default(CREATOR)
+  countryId       String?
+  country         Country? @relation(fields: [countryId], references: [id])
+  isEmailVerified Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creatorProfile CreatorProfile?
+  brandProfile   BrandProfile?
+  refreshTokens  RefreshToken[]
+  passwordResets PasswordReset[]
+  wallet         Wallet?
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+// ─── Module 3 — Creator Profile & KYC ────────────────────────────────────────
+
+model CreatorProfile {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                String?            @db.VarChar(500)
+  avatar             String?
+  coverImage         String?
+  location           String?            @db.VarChar(100)
+  website            String?
+  instagram          String?            @db.VarChar(50)
+  instagramFollowers Int?
+  tiktok             String?            @db.VarChar(50)
+  tiktokFollowers    Int?
+  youtube            String?            @db.VarChar(100)
+  youtubeFollowers   Int?
+  facebook           String?            @db.VarChar(100)
+  twitter            String?            @db.VarChar(50)
+  behance            String?            @db.VarChar(100)
+  categories         String[]
+  isVerified         Boolean            @default(false)
+  verificationStatus VerificationStatus @default(PENDING)
+  averageRating      Float              @default(0)
+  totalReviews       Int                @default(0)
+  totalEarnings      Decimal            @default(0) @db.Decimal(15, 2)
+  pricingJson        Json?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  kyc     CreatorKyc?
+  content Content[]
+  offers  Offer[]     @relation("CreatorOffers")
+
+  @@map("creator_profiles")
+}
+
+model CreatorKyc {
+  id               String         @id @default(cuid())
+  creatorProfileId String         @unique
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+
+  // Identity
+  nationalId  String?   @db.VarChar(20)
+  idFrontUrl  String?
+  idBackUrl   String?
+  dateOfBirth DateTime?
+
+  // Tax
+  kraPin     String? @db.VarChar(20)
+  kraCertUrl String?
+
+  // Contact
+  phone String? @db.VarChar(20)
+  city  String? @db.VarChar(100)
+
+  // Additional info captured at KYC time
+  portfolioUrls String[]
+  bio           String?  @db.VarChar(500)
+  categories    String[]
+
+  // External API validation results
+  iprsStatus    ExternalVerificationStatus @default(PENDING)
+  kraStatus     ExternalVerificationStatus @default(PENDING)
+  iprsCheckedAt DateTime?
+  kraCheckedAt  DateTime?
+
+  // Admin review
+  status        KycStatus @default(NOT_SUBMITTED)
+  adminComments String?   @db.VarChar(1000)
+  reviewedBy    String? // Admin User.id
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("creator_kyc")
+}
+
+// ─── Module 4 — Brand Profile ─────────────────────────────────────────────────
+
+model BrandProfile {
+  id                  String             @id @default(cuid())
+  userId              String             @unique
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName         String             @db.VarChar(200)
+  industry            String?            @db.VarChar(100)
+  description         String?            @db.VarChar(1000)
+  logo                String?
+  coverImage          String?
+  website             String?
+  phone               String?            @db.VarChar(20)
+  contactEmail        String?            @db.VarChar(200)
+  address             String?            @db.VarChar(200)
+  city                String?            @db.VarChar(100)
+  registrationNumber  String?            @db.VarChar(100)
+  contactPersonName   String?            @db.VarChar(100)
+  contactPersonId     String?            @db.VarChar(50)
+  contactPersonRole   String?            @db.VarChar(100)
+  registrationCertUrl String?
+  taxComplianceUrl    String?
+  instagram           String?            @db.VarChar(100)
+  tiktok              String?            @db.VarChar(100)
+  youtube             String?            @db.VarChar(100)
+  facebook            String?            @db.VarChar(100)
+  twitter             String?            @db.VarChar(100)
+  linkedin            String?            @db.VarChar(100)
+  isVerified          Boolean            @default(false)
+  verificationStatus  VerificationStatus @default(PENDING)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  offers Offer[] @relation("BrandOffers")
+
+  @@map("brand_profiles")
+}
+
+// ─── Module 5 — Content ───────────────────────────────────────────────────────
+
+model ContentCategory {
+  id       String            @id @default(cuid())
+  name     String            @unique @db.VarChar(100)
+  slug     String            @unique @db.VarChar(100)
+  parentId String?
+  parent   ContentCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children ContentCategory[] @relation("CategoryTree")
+  content  Content[]
+
+  @@map("content_categories")
+}
+
+model Content {
+  id               String           @id @default(cuid())
+  creatorProfileId String
+  creatorProfile   CreatorProfile   @relation(fields: [creatorProfileId], references: [id])
+  categoryId       String?
+  category         ContentCategory? @relation(fields: [categoryId], references: [id])
+
+  title       String          @db.VarChar(200)
+  description String?         @db.VarChar(2000)
+  type        ContentType
+  platform    ContentPlatform
+  status      ContentStatus   @default(DRAFT)
+
+  // Files
+  fileUrl      String?
+  thumbnailUrl String?
+  previewUrl   String?
+
+  // Pricing
+  price    Decimal @db.Decimal(12, 2)
+  currency String  @default("KES") @db.VarChar(5)
+
+  // Metadata
+  tags            String[]
+  durationSeconds Int?
+  fileSizeBytes   BigInt?
+
+  // Moderation
+  moderationStatus ModerationStatus @default(QUEUED)
+
+  // Points to the current live version
+  currentVersionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions   ContentVersion[]
+  moderation ModerationEntry?
+  offers     Offer[]
+  license    ContentLicense?
+
+  @@index([creatorProfileId])
+  @@index([status])
+  @@index([platform])
+  @@index([status, platform])
+  @@map("content")
+}
+
+model ContentVersion {
+  id        String   @id @default(cuid())
+  contentId String
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  version   Int
+  fileUrl   String
+  notes     String?  @db.VarChar(500)
+  createdBy String // User.id
+  createdAt DateTime @default(now())
+
+  @@unique([contentId, version])
+  @@map("content_versions")
+}
+
+model ContentLicense {
+  id          String   @id @default(cuid())
+  contentId   String   @unique
+  content     Content  @relation(fields: [contentId], references: [id])
+  brandUserId String // User.id of the buyer
+  offerId     String   @unique
+  offer       Offer    @relation(fields: [offerId], references: [id])
+  issuedAt    DateTime @default(now())
+  licenseText String? // generated PDF URL or raw text
+
+  @@map("content_licenses")
+}
+
+// ─── Module 6 — Content Moderation ───────────────────────────────────────────
+
+model ModerationEntry {
+  id              String           @id @default(cuid())
+  contentId       String           @unique
+  content         Content          @relation(fields: [contentId], references: [id])
+  status          ModerationStatus @default(QUEUED)
+  assignedAdminId String? // User.id
+  submittedAt     DateTime         @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String? // User.id
+
+  ruleResults      ModerationRuleResult[]
+  rejectionReasons RejectionReason[]
+
+  @@index([status])
+  @@map("moderation_entries")
+}
+
+model ModerationRule {
+  id          String  @id @default(cuid())
+  name        String  @db.VarChar(200)
+  description String?
+  ruleType    String  @db.VarChar(50)
+  countryId   String?
+  isActive    Boolean @default(true)
+
+  results ModerationRuleResult[]
+
+  @@map("moderation_rules")
+}
+
+model ModerationRuleResult {
+  id                String          @id @default(cuid())
+  moderationEntryId String
+  moderationEntry   ModerationEntry @relation(fields: [moderationEntryId], references: [id], onDelete: Cascade)
+  ruleId            String
+  rule              ModerationRule  @relation(fields: [ruleId], references: [id])
+  passed            Boolean
+  details           Json?
+  checkedAt         DateTime        @default(now())
+
+  @@map("moderation_rule_results")
+}
+
+model RejectionReason {
+  id                String          @id @default(cuid())
+  moderationEntryId String
+  moderationEntry   ModerationEntry @relation(fields: [moderationEntryId], references: [id], onDelete: Cascade)
+  reasonCode        String          @db.VarChar(100)
+  notes             String?         @db.VarChar(500)
+  createdAt         DateTime        @default(now())
+
+  @@map("rejection_reasons")
+}
+
+// ─── Module 7 — Marketplace & Negotiation ────────────────────────────────────
+
+model Offer {
+  id               String         @id @default(cuid())
+  contentId        String
+  content          Content        @relation(fields: [contentId], references: [id])
+  brandProfileId   String
+  brandProfile     BrandProfile   @relation("BrandOffers", fields: [brandProfileId], references: [id])
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation("CreatorOffers", fields: [creatorProfileId], references: [id])
+
+  initialAmount Decimal     @db.Decimal(12, 2)
+  currentAmount Decimal     @db.Decimal(12, 2)
+  currency      String      @default("KES") @db.VarChar(5)
+  status        OfferStatus @default(PENDING)
+  expiresAt     DateTime?
+  message       String?     @db.VarChar(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events  OfferEvent[]
+  license ContentLicense?
+
+  @@index([contentId])
+  @@index([brandProfileId])
+  @@index([creatorProfileId])
+  @@index([status])
+  @@map("offers")
+}
+
+model OfferEvent {
+  id        String   @id @default(cuid())
+  offerId   String
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  actorId   String // User.id
+  eventType String   @db.VarChar(50) // "CREATED" | "COUNTER" | "ACCEPTED" | "REJECTED" | "EXPIRED"
+  amount    Decimal? @db.Decimal(12, 2)
+  message   String?  @db.VarChar(1000)
+  createdAt DateTime @default(now())
+
+  @@index([offerId])
+  @@map("offer_events")
+}
+
+// ─── Module 9 — Wallet & Ledger ───────────────────────────────────────────────
+
+model Wallet {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance        Decimal  @default(0) @db.Decimal(15, 2)
+  pendingBalance Decimal  @default(0) @db.Decimal(15, 2)
+  currency       String   @default("KES") @db.VarChar(5)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ledgerEntries LedgerEntry[]
+  payments      Payment[]
+  payouts       Payout[]
+
+  @@map("wallets")
+}
+
+// Append-only — never UPDATE or DELETE rows
+model LedgerEntry {
+  id            String          @id @default(cuid())
+  walletId      String
+  wallet        Wallet          @relation(fields: [walletId], references: [id])
+  type          TransactionType
+  amount        Decimal         @db.Decimal(15, 2) // always positive
+  direction     String          @db.VarChar(6) // "CREDIT" | "DEBIT"
+  balanceAfter  Decimal         @db.Decimal(15, 2) // snapshot after this entry
+  currency      String          @default("KES") @db.VarChar(5)
+  description   String          @db.VarChar(500)
+  referenceId   String? // Payment.id / Payout.id / Offer.id / Milestone.id
+  referenceType String?         @db.VarChar(50)
+  createdAt     DateTime        @default(now())
+
+  @@index([walletId, createdAt(sort: Desc)])
+  @@map("ledger_entries")
+}
+
+// ─── Module 10 — Payments & Payouts ──────────────────────────────────────────
+
+model Payment {
+  id          String        @id @default(cuid())
+  walletId    String
+  wallet      Wallet        @relation(fields: [walletId], references: [id])
+  amount      Decimal       @db.Decimal(12, 2)
+  currency    String        @default("KES") @db.VarChar(5)
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+  externalRef String?       @db.VarChar(200) // MPESA code, Stripe PI, etc.
+  metadata    Json?
+  confirmedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  commissions PlatformCommission[]
+
+  @@index([walletId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Payout {
+  id       String        @id @default(cuid())
+  walletId String
+  wallet   Wallet        @relation(fields: [walletId], references: [id])
+  amount   Decimal       @db.Decimal(12, 2)
+  currency String        @default("KES") @db.VarChar(5)
+  method   PaymentMethod
+  status   PayoutStatus  @default(REQUESTED)
+
+  // Destination — one set of fields populated depending on method
+  mpesaPhone      String? @db.VarChar(20)
+  bankName        String? @db.VarChar(100)
+  bankAccountNo   String? @db.VarChar(50)
+  bankAccountName String? @db.VarChar(100)
+
+  // Admin approval
+  approvedBy    String? // Admin User.id
+  approvedAt    DateTime?
+  processedAt   DateTime?
+  failureReason String?   @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([walletId])
+  @@index([status])
+  @@map("payouts")
+}
+
+model PlatformCommission {
+  id        String   @id @default(cuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id])
+  amount    Decimal  @db.Decimal(12, 2)
+  rate      Decimal  @db.Decimal(5, 4) // e.g. 0.1500 = 15%
+  createdAt DateTime @default(now())
+
+  @@map("platform_commissions")
+}
+
+model CommissionRule {
+  id              String    @id @default(cuid())
+  transactionType String    @db.VarChar(50)
+  rate            Decimal   @db.Decimal(5, 4)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdBy       String // Admin User.id
+  createdAt       DateTime  @default(now())
+
+  @@map("commission_rules")
+}
+
+// ─── Module 13 — Tax ──────────────────────────────────────────────────────────
+
+enum TaxType {
+  WITHHOLDING
+  VAT
+  INCOME
+}
+
+model TaxRecord {
+  id            String   @id @default(cuid())
+  userId        String // Creator User.id
+  type          TaxType
+  amount        Decimal  @db.Decimal(12, 2)
+  rate          Decimal  @db.Decimal(5, 4)
+  referenceId   String // LedgerEntry.id or Payment.id
+  referenceType String   @db.VarChar(50)
+  period        String   @db.VarChar(7) // "2026-05"
+  countryId     String
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([period])
+  @@map("tax_records")
+}
+
+model CountryTaxConfig {
+  id        String   @id @default(cuid())
+  countryId String
+  country   Country  @relation(fields: [countryId], references: [id])
+  taxType   TaxType
+  rate      Decimal  @db.Decimal(5, 4)
+  threshold Decimal? @db.Decimal(12, 2)
+  isActive  Boolean  @default(true)
+  updatedBy String // Admin User.id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([countryId, taxType])
+  @@map("country_tax_configs")
+}
