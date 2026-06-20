@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ConflictException,
   UnauthorizedException,
   ForbiddenException,
@@ -17,6 +18,8 @@ import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -51,7 +54,11 @@ export class AuthService {
     await this.prisma.passwordReset.create({
       data: { token: verifyToken, userId: user.id, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
     });
-    await this.email.sendVerificationEmail(user.email, verifyToken);
+    try {
+      await this.email.sendVerificationEmail(user.email, verifyToken);
+    } catch (err) {
+      this.logger.error(`Failed to send verification email to ${user.email}`, err as Error);
+    }
 
     const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email, user.role);
     const profile = await this.getProfile(user.id, user.role as string);

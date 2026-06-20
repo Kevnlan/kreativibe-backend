@@ -30,14 +30,14 @@ const campaignBriefSchema = z.object({
   targetAudience: z.object({
     demographics: z.array(z.string()).default([]),
     interests: z.array(z.string()).default([]),
-    location: z.string().optional(),
+    location: z.string().nullable().optional(),
   }),
   platforms: z.array(z.string()).default([]),
   contentType: z.array(z.string()).default([]),
   budget: budgetSchema,
   timeline: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: z.string().nullable().optional(),
+    endDate: z.string().nullable().optional(),
     milestones: z.array(z.string()).default([]),
   }),
   deliverables: z.array(z.string()).default([]),

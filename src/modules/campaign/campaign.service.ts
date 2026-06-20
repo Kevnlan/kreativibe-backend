@@ -68,7 +68,12 @@ export class CampaignService {
 
   async get(userId: string, id: string) {
     const brandProfileId = await this.brandProfileId(userId);
-    return this.findOwned(brandProfileId, id);
+    const campaign = await this.prisma.campaign.findFirst({
+      where: { id, brandProfileId },
+      include: { _count: { select: { applications: true } } },
+    });
+    if (!campaign) throw new NotFoundException({ message: 'Campaign not found', code: 'CAMPAIGN_NOT_FOUND' });
+    return campaign;
   }
 
   async update(userId: string, id: string, dto: UpdateCampaignDto) {
