@@ -122,6 +122,7 @@ enum PayoutStatus {
   PROCESSING
   COMPLETED
   FAILED
+  REJECTED
   CANCELLED
 }
 
@@ -138,11 +139,15 @@ enum TransactionType {
 // ─── Module 1 — Country ───────────────────────────────────────────────────────
 
 model Country {
-  id             String  @id // "KE", "UG", "TZ"
+  id             String   @id // "KE", "UG", "TZ" — also serves as the ISO code
   name           String
   currency       String // "KES", "UGX", "TZS"
   currencySymbol String // "Ksh", "USh", "TSh"
-  isActive       Boolean @default(false)
+  taxRate        Decimal? @db.Decimal(5, 2) // headline rate (%) for display
+  config         Json? // kycRules, payoutMethods, taxRules, currencies, min/max withdrawal
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   users      User[]
   taxConfigs CountryTaxConfig[]
@@ -652,25 +657,32 @@ model Payment {
 }
 
 model Payout {
-  id       String        @id @default(cuid())
-  walletId String
-  wallet   Wallet        @relation(fields: [walletId], references: [id])
-  amount   Decimal       @db.Decimal(12, 2)
-  currency String        @default("KES") @db.VarChar(5)
-  method   PaymentMethod
-  status   PayoutStatus  @default(REQUESTED)
+  id        String        @id @default(cuid())
+  walletId  String
+  wallet    Wallet        @relation(fields: [walletId], references: [id])
+  amount    Decimal       @db.Decimal(12, 2)
+  fee       Decimal       @default(0) @db.Decimal(12, 2)
+  netAmount Decimal       @db.Decimal(12, 2)
+  currency  String        @default("KES") @db.VarChar(5)
+  method    PaymentMethod
+  status    PayoutStatus  @default(REQUESTED)
 
   // Destination — one set of fields populated depending on method
   mpesaPhone      String? @db.VarChar(20)
   bankName        String? @db.VarChar(100)
   bankAccountNo   String? @db.VarChar(50)
   bankAccountName String? @db.VarChar(100)
+  bankBranchCode  String? @db.VarChar(50)
+  bankSwiftCode   String? @db.VarChar(50)
 
   // Admin approval
-  approvedBy    String? // Admin User.id
-  approvedAt    DateTime?
-  processedAt   DateTime?
-  failureReason String?   @db.VarChar(500)
+  approvedBy      String? // Admin User.id
+  approvedAt      DateTime?
+  processedAt     DateTime?
+  completedAt     DateTime?
+  adminComments   String?   @db.VarChar(1000)
+  rejectionReason String?   @db.VarChar(500)
+  failureReason   String?   @db.VarChar(500)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -742,4 +754,28 @@ model CountryTaxConfig {
 
   @@unique([countryId, taxType])
   @@map("country_tax_configs")
+}
+
+// Per-creator tax preferences (KRA PIN lives on CreatorKyc; this captures residency/opt-in)
+model TaxProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique // Creator User.id
+  kraPin              String?  @db.VarChar(20)
+  taxResidency        String?  @db.VarChar(100)
+  withholdingTaxOptIn Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("tax_profiles")
+}
+
+model TaxDocument {
+  id         String   @id @default(cuid())
+  userId     String // Creator User.id
+  type       String   @db.VarChar(50) // "KRA_CERTIFICATE" | "WITHHOLDING_CERT" | "OTHER"
+  url        String
+  uploadedAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("tax_documents")
 }
