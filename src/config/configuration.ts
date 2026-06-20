@@ -18,6 +18,8 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string(),
   FIREBASE_CLIENT_EMAIL: z.string(),
   FIREBASE_STORAGE_BUCKET: z.string(),
+  OPENROUTER_API_KEY: z.string(),
+  OPENROUTER_MODEL: z.string().default('openai/gpt-4o'),
 });
 
 export default () => {

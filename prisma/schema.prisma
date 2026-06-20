@@ -80,6 +80,28 @@ enum OfferStatus {
   WITHDRAWN
 }
 
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignSource {
+  MANUAL
+  AI
+}
+
+enum ApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  SHORTLISTED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
 enum PaymentMethod {
   MPESA
   CARD
@@ -209,9 +231,10 @@ model CreatorProfile {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  kyc     CreatorKyc?
-  content Content[]
-  offers  Offer[]     @relation("CreatorOffers")
+  kyc          CreatorKyc?
+  content      Content[]
+  offers       Offer[]               @relation("CreatorOffers")
+  applications CampaignApplication[]
 
   @@map("creator_profiles")
 }
@@ -292,7 +315,9 @@ model BrandProfile {
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
-  offers Offer[] @relation("BrandOffers")
+  offers          Offer[]          @relation("BrandOffers")
+  campaigns       Campaign[]
+  aiConversations AiConversation[]
 
   @@map("brand_profiles")
 }
@@ -485,6 +510,84 @@ model OfferEvent {
 
   @@index([offerId])
   @@map("offer_events")
+}
+
+// ─── Module 8 — Campaigns ─────────────────────────────────────────────────────
+
+model Campaign {
+  id             String       @id @default(cuid())
+  brandProfileId String
+  brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
+
+  title        String   @db.VarChar(200)
+  objective    String?  @db.VarChar(500)
+  description  String?  @db.VarChar(2000)
+  audience     String?  @db.VarChar(500)
+  platforms    String[]
+  contentTypes String[]
+  categories   String[]
+  deliverables String[]
+  milestones   String[]
+  messaging    String?  @db.VarChar(1000)
+  tone         String?  @db.VarChar(100)
+
+  budgetMin Decimal  @db.Decimal(12, 2)
+  budgetMax Decimal? @db.Decimal(12, 2)
+  currency  String   @default("KES") @db.VarChar(5)
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  status CampaignStatus @default(DRAFT)
+  source CampaignSource @default(MANUAL)
+  brief  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications CampaignApplication[]
+
+  @@index([brandProfileId])
+  @@index([status])
+  @@map("campaigns")
+}
+
+model CampaignApplication {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+
+  message      String?           @db.VarChar(2000)
+  proposedRate Decimal?          @db.Decimal(12, 2)
+  currency     String            @default("KES") @db.VarChar(5)
+  status       ApplicationStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, creatorProfileId])
+  @@index([campaignId])
+  @@index([creatorProfileId])
+  @@index([status])
+  @@map("campaign_applications")
+}
+
+model AiConversation {
+  id             String       @id @default(cuid())
+  brandProfileId String
+  brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
+
+  title    String? @db.VarChar(200)
+  messages Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandProfileId])
+  @@map("ai_conversations")
 }
 
 // ─── Module 9 — Wallet & Ledger ───────────────────────────────────────────────

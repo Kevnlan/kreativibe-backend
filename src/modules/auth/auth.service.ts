@@ -71,7 +71,8 @@ export class AuthService {
     return { user: this.sanitizeUser(user), accessToken, refreshToken, ...profile };
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken?: string) {
+    if (!refreshToken) return;
     await this.prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
   }
 

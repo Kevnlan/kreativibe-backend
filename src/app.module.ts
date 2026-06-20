@@ -5,6 +5,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CreatorModule } from './modules/creator/creator.module';
 import { BrandModule } from './modules/brand/brand.module';
+import { CampaignModule } from './modules/campaign/campaign.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -15,6 +16,7 @@ import configuration from './config/configuration';
     AuthModule,
     CreatorModule,
     BrandModule,
+    CampaignModule,
   ],
 })
 export class AppModule {}
