@@ -12,7 +12,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.enableCors();
 
-  const port = process.env.PORT ?? 3001;
+  const port = process.env.PORT ?? 3050;
   await app.listen(port);
   console.log(`Kreativibe API running on http://localhost:${port}/api`);
 }

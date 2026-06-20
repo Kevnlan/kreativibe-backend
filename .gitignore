@@ -47,5 +47,8 @@ tmp/
 *service-account*.json
 firebase-adminsdk*.json
 
+# Postman collections
+*.postman_collection.json
+
 *.md
 !README.md

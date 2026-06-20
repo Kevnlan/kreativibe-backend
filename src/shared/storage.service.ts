@@ -11,16 +11,17 @@ export class StorageService implements OnModuleInit {
   constructor(private config: ConfigService) {}
 
   onModuleInit() {
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: this.config.get('FIREBASE_PROJECT_ID'),
-          privateKey: this.config.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n'),
-          clientEmail: this.config.get('FIREBASE_CLIENT_EMAIL'),
-        }),
-      });
-    }
-    this.bucket = admin.storage().bucket(this.config.get('FIREBASE_STORAGE_BUCKET'));
+    // Firebase initialization commented out until credentials are available
+    // if (!admin.apps.length) {
+    //   admin.initializeApp({
+    //     credential: admin.credential.cert({
+    //       projectId: this.config.get('FIREBASE_PROJECT_ID'),
+    //       privateKey: this.config.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n'),
+    //       clientEmail: this.config.get('FIREBASE_CLIENT_EMAIL'),
+    //     }),
+    //   });
+    // }
+    // this.bucket = admin.storage().bucket(this.config.get('FIREBASE_STORAGE_BUCKET'));
   }
 
   async upload(file: Express.Multer.File, path: string): Promise<string> {
