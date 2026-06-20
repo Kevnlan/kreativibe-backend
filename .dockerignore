@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+.git
+.env
+.env.local
+.env.*.local
+*.log
+debug.log
+coverage
+.vscode
+.idea
+*.md
+!README.md
+*.postman_collection.json
+.claude
