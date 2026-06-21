@@ -103,7 +103,10 @@ export class CampaignService {
         code: 'INVALID_STATUS_TRANSITION',
       });
     }
-    return this.prisma.campaign.update({ where: { id }, data: { status: to } });
+    return this.prisma.campaign.update({
+      where: { id },
+      data: { status: to, ...(to === 'COMPLETED' ? { completedAt: new Date() } : {}) },
+    });
   }
 
   publish(userId: string, id: string) {

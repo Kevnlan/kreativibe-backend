@@ -11,6 +11,18 @@ import { KycModule } from './modules/kyc/kyc.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { WithdrawalModule } from './modules/withdrawal/withdrawal.module';
 import { TaxModule } from './modules/tax/tax.module';
+import { ContentModule } from './modules/content/content.module';
+import { SocialModule } from './modules/social/social.module';
+import { SchedulingModule } from './modules/scheduling/scheduling.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
+import { CreatorCampaignModule } from './modules/creator-campaign/creator-campaign.module';
+import { ContractModule } from './modules/contract/contract.module';
+import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { PostsModule } from './modules/posts/posts.module';
+import { ReputationModule } from './modules/reputation/reputation.module';
+import { EducationModule } from './modules/education/education.module';
+import { EarningsModule } from './modules/earnings/earnings.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -27,6 +39,18 @@ import configuration from './config/configuration';
     WalletModule,
     WithdrawalModule,
     TaxModule,
+    ContentModule,
+    SocialModule,
+    SchedulingModule,
+    DiscoveryModule,
+    CreatorCampaignModule,
+    ContractModule,
+    PortfolioModule,
+    PostsModule,
+    ReputationModule,
+    EducationModule,
+    EarningsModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

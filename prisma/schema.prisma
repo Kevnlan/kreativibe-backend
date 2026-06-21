@@ -136,6 +136,46 @@ enum TransactionType {
   TAX_DEDUCTION
 }
 
+enum ProposalStatus {
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+}
+
+enum MilestoneStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+enum DeliveryItemType {
+  IMAGE
+  VIDEO
+  AUDIO
+  LINK
+}
+
+enum ContractStatus {
+  DRAFT
+  PARTIALLY_SIGNED
+  ACTIVE
+}
+
+enum PublishedPostStatus {
+  ACTIVE
+  COMPLETED
+  PENDING
+}
+
+enum ReputationPointType {
+  EARNED
+  BONUS
+  MILESTONE
+}
+
 // ─── Module 1 — Country ───────────────────────────────────────────────────────
 
 model Country {
@@ -170,11 +210,17 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  twoFactorEnabled   Boolean   @default(false)
+  twoFactorSecret    String?
+  twoFactorEnabledAt DateTime?
+  backupCodes        String[] // hashed backup codes; consumed (removed) on use
+
   creatorProfile CreatorProfile?
   brandProfile   BrandProfile?
   refreshTokens  RefreshToken[]
   passwordResets PasswordReset[]
   wallet         Wallet?
+  socialAccounts SocialAccount[]
 
   @@index([email])
   @@index([role])
@@ -236,10 +282,18 @@ model CreatorProfile {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  kyc          CreatorKyc?
-  content      Content[]
-  offers       Offer[]               @relation("CreatorOffers")
-  applications CampaignApplication[]
+  kyc                CreatorKyc?
+  content            Content[]
+  offers             Offer[]               @relation("CreatorOffers")
+  applications       CampaignApplication[]
+  scheduledPosts     ScheduledPost[]
+  proposals          Proposal[]
+  portfolioItems     PortfolioItem[]
+  publishedPosts     PublishedPost[]
+  reputationPoints   ReputationPoint[]
+  achievements       CreatorAchievement[]
+  lessonCompletions  LessonCompletion[]
+  courseCertificates CourseCertificate[]
 
   @@map("creator_profiles")
 }
@@ -348,22 +402,27 @@ model Content {
   categoryId       String?
   category         ContentCategory? @relation(fields: [categoryId], references: [id])
 
-  title       String          @db.VarChar(200)
-  description String?         @db.VarChar(2000)
+  title       String            @db.VarChar(200)
+  description String?           @db.VarChar(2000)
   type        ContentType
-  platform    ContentPlatform
-  status      ContentStatus   @default(DRAFT)
+  platforms   ContentPlatform[]
+  status      ContentStatus     @default(DRAFT)
 
   // Files
   fileUrl      String?
   thumbnailUrl String?
   previewUrl   String?
+  coverImage   String?
+  mediaUrls    String[]
 
   // Pricing
   price    Decimal @db.Decimal(12, 2)
   currency String  @default("KES") @db.VarChar(5)
 
   // Metadata
+  format          String? @db.VarChar(50) // e.g. "REEL", "STORY", "POST" — free-text creative format, distinct from `type`
+  categoryCode    String? @db.VarChar(100) // flat category code (e.g. "BEAUTY"), separate from the categoryId taxonomy relation
+  brand           String? @db.VarChar(200) // free-text brand tag entered by the creator, not a BrandProfile relation
   tags            String[]
   durationSeconds Int?
   fileSizeBytes   BigInt?
@@ -384,8 +443,6 @@ model Content {
 
   @@index([creatorProfileId])
   @@index([status])
-  @@index([platform])
-  @@index([status, platform])
   @@map("content")
 }
 
@@ -543,14 +600,19 @@ model Campaign {
   startDate DateTime?
   endDate   DateTime?
 
-  status CampaignStatus @default(DRAFT)
-  source CampaignSource @default(MANUAL)
-  brief  Json?
+  status      CampaignStatus @default(DRAFT)
+  source      CampaignSource @default(MANUAL)
+  brief       Json?
+  completedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  applications CampaignApplication[]
+  applications   CampaignApplication[]
+  scheduledPosts ScheduledPost[]
+  proposals      Proposal[]
+  campaignMilestones CampaignMilestone[]
+  contract       Contract?
 
   @@index([brandProfileId])
   @@index([status])
@@ -778,4 +840,319 @@ model TaxDocument {
 
   @@index([userId])
   @@map("tax_documents")
+}
+
+// ─── Module 14 — Social Accounts & Scheduling ─────────────────────────────────
+
+enum ScheduledPostStatus {
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+model SocialAccount {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform       ContentPlatform
+  platformUserId String
+  username       String?         @db.VarChar(100)
+  displayName    String?         @db.VarChar(200)
+  profileImage   String?
+  accessToken    String // encrypted at rest by the OAuth provider integration
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  permissions    String[]
+  isActive       Boolean         @default(true)
+  lastSyncedAt   DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  scheduledPosts ScheduledPost[]
+
+  @@unique([userId, platform, platformUserId])
+  @@index([userId])
+  @@map("social_accounts")
+}
+
+model ScheduledPost {
+  id               String        @id @default(cuid())
+  campaignId       String
+  campaign         Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+  socialAccountId  String?
+  socialAccount    SocialAccount? @relation(fields: [socialAccountId], references: [id])
+
+  title           String              @db.VarChar(200)
+  platform        ContentPlatform
+  scheduledDate   String              @db.VarChar(10) // "2026-07-10"
+  scheduledTime   String              @db.VarChar(5) // "14:30"
+  content         String?             @db.VarChar(2000)
+  media           String[]
+  status          ScheduledPostStatus @default(SCHEDULED)
+  publishedAt     DateTime?
+  platformPostUrl String?
+  failureReason   String?             @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  publishedPost PublishedPost?
+
+  @@index([campaignId])
+  @@index([creatorProfileId])
+  @@map("scheduled_posts")
+}
+
+// ─── Module 15 — Proposals, Milestones & Delivery ─────────────────────────────
+
+model Proposal {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+
+  status       ProposalStatus @default(DRAFT)
+  proposedRate Decimal?       @db.Decimal(12, 2)
+  currency     String         @default("KES") @db.VarChar(5)
+  deliverables String[]
+  timeline     String?        @db.VarChar(500)
+  coverLetter  String?        @db.VarChar(2000)
+  submittedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, creatorProfileId])
+  @@index([campaignId])
+  @@map("proposals")
+}
+
+model CampaignMilestone {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  title        String           @db.VarChar(200)
+  description  String?          @db.VarChar(1000)
+  dueDate      DateTime?
+  amount       Decimal          @db.Decimal(12, 2)
+  currency     String           @default("KES") @db.VarChar(5)
+  status       MilestoneStatus  @default(PENDING)
+  deliverables String[]
+  submittedAt  DateTime?
+  approvedAt   DateTime?
+  reviewNotes  String?          @db.VarChar(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  delivery MilestoneDelivery?
+
+  @@index([campaignId])
+  @@map("campaign_milestones")
+}
+
+model MilestoneDelivery {
+  id          String            @id @default(cuid())
+  milestoneId String            @unique
+  milestone   CampaignMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  submittedByUserId String
+  submittedAt       DateTime @default(now())
+  notes             String?  @db.VarChar(2000)
+  reviewNotes       String?  @db.VarChar(1000)
+
+  items MilestoneDeliveryItem[]
+
+  @@map("milestone_deliveries")
+}
+
+model MilestoneDeliveryItem {
+  id         String             @id @default(cuid())
+  deliveryId String
+  delivery   MilestoneDelivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  title       String           @db.VarChar(200)
+  type        DeliveryItemType
+  url         String
+  thumbnail   String?
+  description String?          @db.VarChar(1000)
+  metadata    Json?
+
+  @@index([deliveryId])
+  @@map("milestone_delivery_items")
+}
+
+// ─── Module 16 — Contracts ─────────────────────────────────────────────────────
+
+model Contract {
+  id            String   @id @default(cuid())
+  campaignId    String   @unique
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  applicationId String
+
+  brandName    String  @db.VarChar(200)
+  creativeName String  @db.VarChar(200)
+  startDate    DateTime?
+  endDate      DateTime?
+  totalAmount  Decimal @db.Decimal(12, 2)
+  currency     String  @default("KES") @db.VarChar(5)
+
+  clauses         Json
+  additionalTerms String?         @db.VarChar(2000)
+  status          ContractStatus  @default(DRAFT)
+
+  brandSignedAt   DateTime?
+  creatorSignedAt DateTime?
+  brandSignature  String?         @db.VarChar(200)
+  creatorSignature String?        @db.VarChar(200)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contracts")
+}
+
+// ─── Module 17 — Portfolio & Published Posts ──────────────────────────────────
+
+model PortfolioItem {
+  id               String         @id @default(cuid())
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+
+  title       String   @db.VarChar(200)
+  brand       String?  @db.VarChar(200)
+  platform    ContentPlatform
+  mediaUrl    String?
+  completedAt DateTime?
+  tags        String[]
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorProfileId])
+  @@map("portfolio_items")
+}
+
+model PublishedPost {
+  id               String         @id @default(cuid())
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+  scheduledPostId  String?        @unique
+  scheduledPost    ScheduledPost? @relation(fields: [scheduledPostId], references: [id])
+
+  title    String              @db.VarChar(200)
+  platform ContentPlatform
+  type     String              @db.VarChar(20) // "REEL" | "VIDEO" | "POST" | "STORY"
+  status   PublishedPostStatus @default(ACTIVE)
+  views    Int                 @default(0)
+  likes    Int                 @default(0)
+  comments Int                 @default(0)
+  price    Decimal             @default(0) @db.Decimal(12, 2)
+  currency String              @default("KES") @db.VarChar(5)
+  brand    String?             @db.VarChar(200)
+  postedAt DateTime            @default(now())
+
+  @@index([creatorProfileId])
+  @@map("published_posts")
+}
+
+// ─── Module 18 — Reputation ────────────────────────────────────────────────────
+
+model ReputationPoint {
+  id               String              @id @default(cuid())
+  creatorProfileId String
+  creatorProfile   CreatorProfile      @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+
+  activity String              @db.VarChar(200)
+  points   Int
+  type     ReputationPointType
+  createdAt DateTime @default(now())
+
+  @@index([creatorProfileId, createdAt(sort: Desc)])
+  @@map("reputation_points")
+}
+
+model CreatorAchievement {
+  id               String         @id @default(cuid())
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+
+  key      String   @db.VarChar(100) // matches a key in the in-code achievement catalog
+  earnedAt DateTime @default(now())
+
+  @@unique([creatorProfileId, key])
+  @@map("creator_achievements")
+}
+
+// ─── Module 19 — Education ─────────────────────────────────────────────────────
+
+model Course {
+  id            String  @id @default(cuid())
+  title         String  @db.VarChar(200)
+  description   String? @db.VarChar(1000)
+  duration      String  @db.VarChar(50) // e.g. "45 min"
+  level         String  @db.VarChar(20) // BEGINNER | INTERMEDIATE | ADVANCED
+  category      String  @db.VarChar(50)
+  certification Boolean @default(false)
+  order         Int     @default(0)
+
+  lessons      Lesson[]
+  certificates CourseCertificate[]
+
+  @@map("courses")
+}
+
+model Lesson {
+  id       String @id @default(cuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title    String @db.VarChar(200)
+  order    Int    @default(0)
+
+  completions LessonCompletion[]
+
+  @@index([courseId])
+  @@map("lessons")
+}
+
+model LessonCompletion {
+  id               String         @id @default(cuid())
+  lessonId         String
+  lesson           Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+  completedAt      DateTime       @default(now())
+
+  @@unique([lessonId, creatorProfileId])
+  @@map("lesson_completions")
+}
+
+model CourseCertificate {
+  id               String         @id @default(cuid())
+  courseId         String
+  course           Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  creatorProfileId String
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+  certificateUrl   String
+  issuedAt         DateTime       @default(now())
+
+  @@unique([courseId, creatorProfileId])
+  @@map("course_certificates")
+}
+
+model BestPracticeExample {
+  id         String  @id @default(cuid())
+  title      String  @db.VarChar(200)
+  creator    String  @db.VarChar(200)
+  platform   ContentPlatform
+  views      Int
+  engagement Float
+  niche      String  @db.VarChar(50)
+
+  @@index([niche])
+  @@map("best_practice_examples")
 }

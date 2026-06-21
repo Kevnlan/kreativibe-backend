@@ -72,6 +72,14 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException({ message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' });
     if (!user.isEmailVerified) throw new ForbiddenException({ message: 'Email not verified', code: 'EMAIL_NOT_VERIFIED' });
 
+    if (user.twoFactorEnabled) {
+      const sessionToken = this.jwt.sign(
+        { sub: user.id, type: '2fa-pending' },
+        { secret: this.config.get('JWT_ACCESS_SECRET'), expiresIn: '5m' },
+      );
+      return { requiresTwoFactor: true, sessionToken };
+    }
+
     const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email, user.role);
     const profile = await this.getProfile(user.id, user.role as string);
 
@@ -134,7 +142,7 @@ export class AuthService {
     return { user: this.sanitizeUser(user), ...profile };
   }
 
-  private async generateTokens(userId: string, email: string, role: any) {
+  async generateTokens(userId: string, email: string, role: any) {
     const accessToken = this.jwt.sign(
       { sub: userId, email, role },
       { secret: this.config.get('JWT_ACCESS_SECRET'), expiresIn: this.config.get('JWT_ACCESS_EXPIRES_IN') },
@@ -146,14 +154,14 @@ export class AuthService {
     return { accessToken, refreshToken: rawRefresh };
   }
 
-  private async getProfile(userId: string, role: string) {
+  async getProfile(userId: string, role: string) {
     if (role === 'CREATOR') {
       return { creatorProfile: await this.prisma.creatorProfile.findUnique({ where: { userId } }), brandProfile: null };
     }
     return { creatorProfile: null, brandProfile: await this.prisma.brandProfile.findUnique({ where: { userId } }) };
   }
 
-  private sanitizeUser(user: any) {
+  sanitizeUser(user: any) {
     const { passwordHash: _, ...safe } = user;
     return safe;
   }

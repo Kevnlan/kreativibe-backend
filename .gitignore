@@ -53,3 +53,5 @@ firebase-adminsdk*.json
 *.md
 !README.md
 docs/
+.claude
+.claude/

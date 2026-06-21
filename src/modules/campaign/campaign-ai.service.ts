@@ -1,6 +1,6 @@
-import { Injectable, BadGatewayException, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { AiCompletionService } from '../../shared/ai-completion.service';
 import { AiChatDto, AiBriefDto, RecommendPackagesDto, CreateConversationDto } from './dto/ai.dto';
 
 const CHAT_SYSTEM_PROMPT = `You are Kreativibe's AI campaign assistant. You help brands turn a rough idea into a clear influencer marketing campaign brief through conversation.
@@ -42,7 +42,7 @@ Exactly one package should have "recommended": true. Do not include anything out
 @Injectable()
 export class CampaignAiService {
   constructor(
-    private config: ConfigService,
+    private ai: AiCompletionService,
     private prisma: PrismaService,
   ) {}
 
@@ -51,58 +51,21 @@ export class CampaignAiService {
     return profile.id;
   }
 
-  private async complete(systemPrompt: string, messages: { role: string; content: string }[]): Promise<string> {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.config.get('OPENROUTER_API_KEY')}`,
-        'HTTP-Referer': this.config.get('FRONTEND_URL') as string,
-        'X-Title': 'Kreativibe',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.config.get('OPENROUTER_MODEL'),
-        max_tokens: 1500,
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new BadGatewayException({ message: 'AI provider request failed', code: 'AI_PROVIDER_ERROR' });
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new BadGatewayException({ message: 'AI provider returned no content', code: 'AI_PROVIDER_ERROR' });
-    }
-    return content;
-  }
-
-  private parseJson<T>(content: string): T {
-    const cleaned = content.trim().replace(/^```json\s*/i, '').replace(/```$/, '');
-    try {
-      return JSON.parse(cleaned) as T;
-    } catch {
-      throw new BadGatewayException({ message: 'AI provider returned invalid JSON', code: 'AI_PARSE_ERROR' });
-    }
-  }
-
   async chat(dto: AiChatDto) {
-    const content = await this.complete(CHAT_SYSTEM_PROMPT, dto.messages);
-    return this.parseJson<{ reply: string; suggestions?: string[] }>(content);
+    const content = await this.ai.complete(CHAT_SYSTEM_PROMPT, dto.messages);
+    return this.ai.parseJson<{ reply: string; suggestions?: string[] }>(content);
   }
 
   async brief(dto: AiBriefDto) {
-    const content = await this.complete(BRIEF_SYSTEM_PROMPT, dto.messages);
-    return this.parseJson<Record<string, unknown>>(content);
+    const content = await this.ai.complete(BRIEF_SYSTEM_PROMPT, dto.messages);
+    return this.ai.parseJson<Record<string, unknown>>(content);
   }
 
   async recommendPackages(dto: RecommendPackagesDto) {
-    const content = await this.complete(PACKAGE_SYSTEM_PROMPT, [
+    const content = await this.ai.complete(PACKAGE_SYSTEM_PROMPT, [
       { role: 'user', content: JSON.stringify(dto.brief) },
     ]);
-    return this.parseJson<Record<string, unknown>[]>(content);
+    return this.ai.parseJson<Record<string, unknown>[]>(content);
   }
 
   async createConversation(userId: string, dto: CreateConversationDto) {
