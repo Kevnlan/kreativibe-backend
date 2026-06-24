@@ -10,6 +10,7 @@ export const connectSchema = z.object({
 export type ConnectDto = z.infer<typeof connectSchema>;
 
 export const oauthCallbackSchema = z.object({
+  platform: socialPlatformSchema,
   code: z.string().min(1),
   state: z.string().min(1),
 });

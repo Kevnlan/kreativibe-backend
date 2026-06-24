@@ -35,17 +35,19 @@ export class SchedulingService {
 
   async create(userId: string, campaignId: string, dto: CreateScheduledPostDto) {
     const creatorProfileId = await this.assertAccess(userId, campaignId);
+    const { campaignId: _campaignId, ...rest } = dto;
     return this.prisma.scheduledPost.create({
-      data: { campaignId, creatorProfileId, ...dto, platform: dto.platform as ContentPlatform },
+      data: { campaignId, creatorProfileId, ...rest, platform: rest.platform as ContentPlatform },
     });
   }
 
   async update(userId: string, campaignId: string, postId: string, dto: UpdateScheduledPostDto) {
     const creatorProfileId = await this.assertAccess(userId, campaignId);
     await this.findOwnedPost(campaignId, creatorProfileId, postId);
+    const { campaignId: _campaignId, postId: _postId, ...rest } = dto;
     return this.prisma.scheduledPost.update({
       where: { id: postId },
-      data: { ...dto, platform: dto.platform as ContentPlatform | undefined },
+      data: { ...rest, platform: rest.platform as ContentPlatform | undefined },
     });
   }
 

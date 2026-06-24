@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const saveProposalSchema = z.object({
+  campaignId: z.string(),
   proposedRate: z.number().nonnegative().optional(),
   currency: z.string().max(5).default('KES'),
   deliverables: z.array(z.string()).default([]),

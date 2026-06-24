@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { WithdrawalService } from './withdrawal.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -12,6 +12,7 @@ import {
   approveWithdrawalSchema, ApproveWithdrawalDto,
   rejectWithdrawalSchema, RejectWithdrawalDto,
 } from './dto/withdrawal.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 @Controller('withdrawals')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,10 +28,10 @@ export class WithdrawalController {
     return this.withdrawals.list(user.id, query);
   }
 
-  @Post(':id/get')
+  @Post('get')
   @Roles(Role.CREATOR, Role.ADMIN)
-  get(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.withdrawals.get(user.id, user.role, id);
+  get(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.withdrawals.get(user.id, user.role, dto.id);
   }
 
   @Post('create')
@@ -42,10 +43,10 @@ export class WithdrawalController {
     return this.withdrawals.create(user.id, dto);
   }
 
-  @Post(':id/cancel')
+  @Post('cancel')
   @Roles(Role.CREATOR)
-  async cancel(@CurrentUser() user: any, @Param('id') id: string) {
-    await this.withdrawals.cancel(user.id, id);
+  async cancel(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    await this.withdrawals.cancel(user.id, dto.id);
     return { message: 'Withdrawal cancelled' };
   }
 }
@@ -56,26 +57,18 @@ export class WithdrawalController {
 export class AdminWithdrawalController {
   constructor(private withdrawals: WithdrawalService) {}
 
-  @Post(':id/approve')
-  approve(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(approveWithdrawalSchema)) dto: ApproveWithdrawalDto,
-  ) {
-    return this.withdrawals.approve(user.id, id, dto);
+  @Post('approve')
+  approve(@CurrentUser() user: any, @Body(new ZodValidationPipe(approveWithdrawalSchema)) dto: ApproveWithdrawalDto) {
+    return this.withdrawals.approve(user.id, dto.id, dto);
   }
 
-  @Post(':id/reject')
-  reject(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(rejectWithdrawalSchema)) dto: RejectWithdrawalDto,
-  ) {
-    return this.withdrawals.reject(user.id, id, dto);
+  @Post('reject')
+  reject(@CurrentUser() user: any, @Body(new ZodValidationPipe(rejectWithdrawalSchema)) dto: RejectWithdrawalDto) {
+    return this.withdrawals.reject(user.id, dto.id, dto);
   }
 
-  @Post(':id/process')
-  process(@Param('id') id: string) {
-    return this.withdrawals.process(id);
+  @Post('process')
+  process(@Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.withdrawals.process(dto.id);
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CountryService } from './country.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -8,8 +8,9 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   createCountrySchema, CreateCountryDto,
   updateCountrySchema, UpdateCountryDto,
-  countryConfigSchema, UpdateCountryConfigDto,
+  updateCountryConfigSchema, UpdateCountryConfigDto,
 } from './dto/country.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 // Public + authenticated reads. POST-only per platform security convention.
 @Controller('countries')
@@ -21,15 +22,15 @@ export class CountryController {
     return this.countries.list();
   }
 
-  @Post(':id/get')
-  get(@Param('id') id: string) {
-    return this.countries.get(id);
+  @Post('get')
+  get(@Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.countries.get(dto.id);
   }
 
-  @Post(':id/config')
+  @Post('config')
   @UseGuards(JwtAuthGuard)
-  getConfig(@Param('id') id: string) {
-    return this.countries.getConfig(id);
+  getConfig(@Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.countries.getConfig(dto.id);
   }
 }
 
@@ -45,25 +46,19 @@ export class AdminCountryController {
     return this.countries.create(dto);
   }
 
-  @Post(':id/update')
-  update(
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateCountrySchema)) dto: UpdateCountryDto,
-  ) {
-    return this.countries.update(id, dto);
+  @Post('update')
+  update(@Body(new ZodValidationPipe(updateCountrySchema)) dto: UpdateCountryDto) {
+    return this.countries.update(dto.id, dto);
   }
 
-  @Post(':id/delete')
-  async remove(@Param('id') id: string) {
-    await this.countries.remove(id);
+  @Post('delete')
+  async remove(@Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    await this.countries.remove(dto.id);
     return { message: 'Country disabled' };
   }
 
-  @Post(':id/config/update')
-  updateConfig(
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(countryConfigSchema)) dto: UpdateCountryConfigDto,
-  ) {
-    return this.countries.updateConfig(id, dto);
+  @Post('config/update')
+  updateConfig(@Body(new ZodValidationPipe(updateCountryConfigSchema)) dto: UpdateCountryConfigDto) {
+    return this.countries.updateConfig(dto.id, dto);
   }
 }

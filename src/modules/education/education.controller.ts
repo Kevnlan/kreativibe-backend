@@ -1,5 +1,6 @@
-import { Controller, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { z } from 'zod';
 import { EducationService } from './education.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -7,6 +8,17 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { listExamplesSchema, ListExamplesDto } from './dto/examples.dto';
+
+const completeLessonSchema = z.object({
+  courseId: z.string(),
+  lessonId: z.string(),
+});
+type CompleteLessonDto = z.infer<typeof completeLessonSchema>;
+
+const courseIdSchema = z.object({
+  courseId: z.string(),
+});
+type CourseIdDto = z.infer<typeof courseIdSchema>;
 
 @Controller('education')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -19,14 +31,14 @@ export class EducationController {
     return this.education.listCourses(user.id);
   }
 
-  @Post('courses/:courseId/lessons/:lessonId/complete')
-  completeLesson(@CurrentUser() user: any, @Param('courseId') courseId: string, @Param('lessonId') lessonId: string) {
-    return this.education.completeLesson(user.id, courseId, lessonId);
+  @Post('courses/lessons/complete')
+  completeLesson(@CurrentUser() user: any, @Body(new ZodValidationPipe(completeLessonSchema)) dto: CompleteLessonDto) {
+    return this.education.completeLesson(user.id, dto.courseId, dto.lessonId);
   }
 
-  @Post('courses/:courseId/certificate/get')
-  getCertificate(@CurrentUser() user: any, @Param('courseId') courseId: string) {
-    return this.education.getCertificate(user.id, courseId);
+  @Post('courses/certificate/get')
+  getCertificate(@CurrentUser() user: any, @Body(new ZodValidationPipe(courseIdSchema)) dto: CourseIdDto) {
+    return this.education.getCertificate(user.id, dto.courseId);
   }
 
   @Post('standards/list')

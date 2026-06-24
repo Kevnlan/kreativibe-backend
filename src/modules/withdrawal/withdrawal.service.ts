@@ -28,6 +28,24 @@ export class WithdrawalService {
     return status === 'PENDING' ? PayoutStatus.PENDING_APPROVAL : (status as PayoutStatus);
   }
 
+  // Derives a chronological status-tracker timeline from the Payout's own timestamps —
+  // no separate event log table; each step only appears once its timestamp is set.
+  private timeline(p: any): { status: string; label: string; timestamp: Date }[] {
+    const events: { status: string; label: string; timestamp: Date }[] = [
+      { status: 'REQUESTED', label: 'Withdrawal requested', timestamp: p.createdAt },
+    ];
+    if (p.approvedAt) events.push({ status: 'APPROVED', label: 'Approved by admin', timestamp: p.approvedAt });
+    if (p.status === 'REJECTED' && p.processedAt) {
+      events.push({ status: 'REJECTED', label: p.rejectionReason ?? 'Withdrawal rejected', timestamp: p.processedAt });
+    } else if (p.processedAt) {
+      events.push({ status: 'PROCESSING', label: 'Processing payout', timestamp: p.processedAt });
+    }
+    if (p.completedAt) events.push({ status: 'COMPLETED', label: 'Funds delivered', timestamp: p.completedAt });
+    if (p.status === 'CANCELLED') events.push({ status: 'CANCELLED', label: 'Withdrawal cancelled', timestamp: p.updatedAt });
+    if (p.status === 'FAILED') events.push({ status: 'FAILED', label: p.failureReason ?? 'Payout failed', timestamp: p.updatedAt });
+    return events;
+  }
+
   private serialize(p: any) {
     const accountDetails =
       p.method === 'MPESA'
@@ -54,6 +72,7 @@ export class WithdrawalService {
       createdAt: p.createdAt,
       processedAt: p.processedAt,
       completedAt: p.completedAt,
+      timeline: this.timeline(p),
     };
   }
 

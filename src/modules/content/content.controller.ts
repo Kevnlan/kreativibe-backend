@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { ContentService } from './content.service';
 import { ContentAiService } from './content-ai.service';
@@ -11,6 +11,7 @@ import { listContentSchema, ListContentDto } from './dto/list-content.dto';
 import { createContentSchema, CreateContentDto } from './dto/create-content.dto';
 import { updateContentSchema, UpdateContentDto } from './dto/update-content.dto';
 import { adviseContentSchema, AdviseContentDto } from './dto/advise.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 @Controller('contents')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,9 +27,9 @@ export class ContentController {
     return this.content.list(user.id, dto);
   }
 
-  @Post(':id/get')
-  get(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.content.get(user.id, id);
+  @Post('get')
+  get(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.content.get(user.id, dto.id);
   }
 
   @Post('create')
@@ -36,28 +37,27 @@ export class ContentController {
     return this.content.create(user.id, dto);
   }
 
-  @Post(':id/update')
+  @Post('update')
   update(
     @CurrentUser() user: any,
-    @Param('id') id: string,
     @Body(new ZodValidationPipe(updateContentSchema)) dto: UpdateContentDto,
   ) {
-    return this.content.update(user.id, id, dto);
+    return this.content.update(user.id, dto.id, dto);
   }
 
-  @Post(':id/delete')
-  remove(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.content.remove(user.id, id);
+  @Post('delete')
+  remove(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.content.remove(user.id, dto.id);
   }
 
-  @Post(':id/duplicate')
-  duplicate(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.content.duplicate(user.id, id);
+  @Post('duplicate')
+  duplicate(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.content.duplicate(user.id, dto.id);
   }
 
-  @Post(':id/versions/list')
-  listVersions(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.content.listVersions(user.id, id);
+  @Post('versions/list')
+  listVersions(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.content.listVersions(user.id, dto.id);
   }
 
   @Post('optimize/advise')

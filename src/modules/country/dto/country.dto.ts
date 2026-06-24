@@ -25,8 +25,14 @@ export const createCountrySchema = z.object({
 
 export type CreateCountryDto = z.infer<typeof createCountrySchema>;
 
-export const updateCountrySchema = createCountrySchema.partial().omit({ code: true });
+export const updateCountrySchema = createCountrySchema.partial().omit({ code: true }).extend({
+  id: z.string(),
+});
 
 export type UpdateCountryDto = z.infer<typeof updateCountrySchema>;
 
-export type UpdateCountryConfigDto = z.infer<typeof countryConfigSchema>;
+export const updateCountryConfigSchema = countryConfigSchema.extend({
+  id: z.string(),
+});
+
+export type UpdateCountryConfigDto = z.infer<typeof updateCountryConfigSchema>;

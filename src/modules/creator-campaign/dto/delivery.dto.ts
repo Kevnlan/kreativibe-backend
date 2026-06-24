@@ -10,6 +10,8 @@ const deliveryItemSchema = z.object({
 });
 
 export const submitDeliverySchema = z.object({
+  campaignId: z.string(),
+  milestoneId: z.string(),
   items: z.array(deliveryItemSchema).min(1),
   notes: z.string().max(2000).optional(),
 });
@@ -17,12 +19,16 @@ export const submitDeliverySchema = z.object({
 export type SubmitDeliveryDto = z.infer<typeof submitDeliverySchema>;
 
 export const rejectDeliverySchema = z.object({
+  campaignId: z.string(),
+  milestoneId: z.string(),
   reason: z.string().min(1).max(1000),
 });
 
 export type RejectDeliveryDto = z.infer<typeof rejectDeliverySchema>;
 
 export const requestRevisionSchema = z.object({
+  campaignId: z.string(),
+  milestoneId: z.string(),
   notes: z.string().min(1).max(1000),
 });
 

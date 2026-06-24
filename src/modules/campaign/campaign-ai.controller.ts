@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CampaignAiService } from './campaign-ai.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { aiChatSchema, AiChatDto, aiBriefSchema, AiBriefDto, recommendPackagesSchema, RecommendPackagesDto, createConversationSchema, CreateConversationDto } from './dto/ai.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 @Controller('campaigns/ai')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -34,18 +35,18 @@ export class CampaignAiController {
     return this.ai.createConversation(user.id, dto);
   }
 
-  @Get('conversations')
+  @Post('conversations/list')
   listConversations(@CurrentUser() user: any) {
     return this.ai.listConversations(user.id);
   }
 
-  @Get('conversations/:id')
-  getConversation(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.ai.getConversation(user.id, id);
+  @Post('conversations/get')
+  getConversation(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.ai.getConversation(user.id, dto.id);
   }
 
-  @Delete('conversations/:id')
-  deleteConversation(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.ai.deleteConversation(user.id, id);
+  @Post('conversations/delete')
+  deleteConversation(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.ai.deleteConversation(user.id, dto.id);
   }
 }

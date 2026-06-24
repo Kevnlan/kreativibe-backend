@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const createScheduledPostSchema = z.object({
+  campaignId: z.string(),
   title: z.string().min(1).max(200),
   platform: z.enum(['INSTAGRAM', 'TIKTOK', 'YOUTUBE', 'FACEBOOK']),
   scheduledDate: z.string().min(1),
@@ -12,6 +13,22 @@ export const createScheduledPostSchema = z.object({
 
 export type CreateScheduledPostDto = z.infer<typeof createScheduledPostSchema>;
 
-export const updateScheduledPostSchema = createScheduledPostSchema.partial();
+export const updateScheduledPostSchema = createScheduledPostSchema.partial().extend({
+  campaignId: z.string(),
+  postId: z.string(),
+});
 
 export type UpdateScheduledPostDto = z.infer<typeof updateScheduledPostSchema>;
+
+export const campaignPostIdSchema = z.object({
+  campaignId: z.string(),
+  postId: z.string(),
+});
+
+export type CampaignPostIdDto = z.infer<typeof campaignPostIdSchema>;
+
+export const campaignIdOnlySchema = z.object({
+  campaignId: z.string(),
+});
+
+export type CampaignIdOnlyDto = z.infer<typeof campaignIdOnlySchema>;

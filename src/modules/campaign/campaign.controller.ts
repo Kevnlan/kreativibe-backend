@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CampaignService } from './campaign.service';
 import { CampaignApplicationService } from './campaign-application.service';
@@ -11,6 +11,7 @@ import { createCampaignSchema, CreateCampaignDto } from './dto/create-campaign.d
 import { updateCampaignSchema, UpdateCampaignDto } from './dto/update-campaign.dto';
 import { listCampaignsSchema, ListCampaignsDto, marketplaceCampaignsSchema, MarketplaceCampaignsDto } from './dto/list-campaigns.dto';
 import { createApplicationSchema, CreateApplicationDto } from './dto/application.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 @Controller('campaigns')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,12 +27,13 @@ export class CampaignController {
     return this.campaigns.create(user.id, dto);
   }
 
-  @Get()
+  @Post('list')
   @Roles(Role.BRAND)
-  list(@CurrentUser() user: any, @Query(new ZodValidationPipe(listCampaignsSchema)) query: ListCampaignsDto) {
+  list(@CurrentUser() user: any, @Body(new ZodValidationPipe(listCampaignsSchema)) query: ListCampaignsDto) {
     return this.campaigns.list(user.id, query);
   }
 
+  // Public/non-sensitive marketplace browsing — left as GET per platform convention exception.
   @Get('marketplace')
   @Roles(Role.CREATOR)
   marketplace(@Query(new ZodValidationPipe(marketplaceCampaignsSchema)) query: MarketplaceCampaignsDto) {
@@ -44,77 +46,69 @@ export class CampaignController {
     return this.campaigns.getPublic(id);
   }
 
-  @Get(':id')
+  @Post('get')
   @Roles(Role.BRAND)
-  get(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.get(user.id, id);
+  get(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.get(user.id, dto.id);
   }
 
-  @Put(':id')
+  @Post('update')
   @Roles(Role.BRAND)
-  update(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateCampaignSchema)) dto: UpdateCampaignDto,
-  ) {
-    return this.campaigns.update(user.id, id, dto);
+  update(@CurrentUser() user: any, @Body(new ZodValidationPipe(updateCampaignSchema)) dto: UpdateCampaignDto) {
+    return this.campaigns.update(user.id, dto.id, dto);
   }
 
-  @Delete(':id')
+  @Post('delete')
   @Roles(Role.BRAND)
-  remove(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.remove(user.id, id);
+  remove(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.remove(user.id, dto.id);
   }
 
-  @Post(':id/publish')
+  @Post('publish')
   @Roles(Role.BRAND)
-  publish(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.publish(user.id, id);
+  publish(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.publish(user.id, dto.id);
   }
 
-  @Post(':id/pause')
+  @Post('pause')
   @Roles(Role.BRAND)
-  pause(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.pause(user.id, id);
+  pause(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.pause(user.id, dto.id);
   }
 
-  @Post(':id/resume')
+  @Post('resume')
   @Roles(Role.BRAND)
-  resume(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.resume(user.id, id);
+  resume(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.resume(user.id, dto.id);
   }
 
-  @Post(':id/complete')
+  @Post('complete')
   @Roles(Role.BRAND)
-  complete(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.complete(user.id, id);
+  complete(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.complete(user.id, dto.id);
   }
 
-  @Post(':id/cancel')
+  @Post('cancel')
   @Roles(Role.BRAND)
-  cancel(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.cancel(user.id, id);
+  cancel(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.cancel(user.id, dto.id);
   }
 
-  @Get(':id/stats')
+  @Post('stats')
   @Roles(Role.BRAND)
-  stats(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.campaigns.stats(user.id, id);
+  stats(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.campaigns.stats(user.id, dto.id);
   }
 
-  @Post(':id/applications')
+  @Post('applications/apply')
   @Roles(Role.CREATOR)
-  apply(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(createApplicationSchema)) dto: CreateApplicationDto,
-  ) {
-    return this.applications.apply(user.id, id, dto);
+  apply(@CurrentUser() user: any, @Body(new ZodValidationPipe(createApplicationSchema)) dto: CreateApplicationDto) {
+    return this.applications.apply(user.id, dto.campaignId, dto);
   }
 
-  @Get(':id/applications')
+  @Post('applications/list')
   @Roles(Role.BRAND)
-  listApplications(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.applications.listForCampaign(user.id, id);
+  listApplications(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.applications.listForCampaign(user.id, dto.id);
   }
 }

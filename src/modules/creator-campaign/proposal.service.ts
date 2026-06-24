@@ -41,10 +41,11 @@ export class ProposalService {
       throw new ConflictException({ message: 'Proposal can no longer be edited', code: 'PROPOSAL_NOT_EDITABLE' });
     }
 
+    const { campaignId: _campaignId, ...rest } = dto;
     return this.prisma.proposal.upsert({
       where: { campaignId_creatorProfileId: { campaignId, creatorProfileId } },
-      create: { campaignId, creatorProfileId, ...dto, status: 'DRAFT' },
-      update: dto,
+      create: { campaignId, creatorProfileId, ...rest, status: 'DRAFT' },
+      update: rest,
     });
   }
 

@@ -22,8 +22,9 @@ export class CampaignApplicationService {
     });
     if (existing) throw new ConflictException({ message: 'You have already applied to this campaign', code: 'ALREADY_APPLIED' });
 
+    const { campaignId: _campaignId, ...rest } = dto;
     return this.prisma.campaignApplication.create({
-      data: { campaignId, creatorProfileId, ...dto },
+      data: { campaignId, creatorProfileId, ...rest },
     });
   }
 

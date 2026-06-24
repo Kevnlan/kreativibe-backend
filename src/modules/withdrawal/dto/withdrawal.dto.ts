@@ -32,12 +32,14 @@ export const createWithdrawalSchema = z.discriminatedUnion('method', [
 export type CreateWithdrawalDto = z.infer<typeof createWithdrawalSchema>;
 
 export const approveWithdrawalSchema = z.object({
+  id: z.string(),
   adminComments: z.string().optional(),
 });
 
 export type ApproveWithdrawalDto = z.infer<typeof approveWithdrawalSchema>;
 
 export const rejectWithdrawalSchema = z.object({
+  id: z.string(),
   rejectionReason: z.string().min(1),
   adminComments: z.string().optional(),
 });

@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PortfolioService } from './portfolio.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { listPortfolioSchema, ListPortfolioDto, addPortfolioItemSchema, AddPortfolioItemDto } from './dto/portfolio.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 @Controller('portfolio')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -25,9 +26,9 @@ export class PortfolioController {
     return this.portfolio.add(user.id, dto);
   }
 
-  @Post(':id/delete')
+  @Post('delete')
   @Roles(Role.CREATOR)
-  remove(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.portfolio.remove(user.id, id);
+  remove(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.portfolio.remove(user.id, dto.id);
   }
 }

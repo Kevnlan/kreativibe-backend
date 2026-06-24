@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Param, Body, UseGuards, UploadedFile, UseInterceptors,
+  Controller, Post, Body, UseGuards, UploadedFile, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
@@ -14,6 +14,7 @@ import {
   generateReportSchema, GenerateReportDto,
   uploadTaxDocSchema,
 } from './dto/tax.dto';
+import { idSchema, IdDto } from '../../common/dto/id.dto';
 
 @Controller('tax')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -54,8 +55,8 @@ export class TaxController {
     return this.tax.listDocuments(user.id);
   }
 
-  @Post('documents/:id/delete')
-  deleteDocument(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.tax.deleteDocument(user.id, id);
+  @Post('documents/delete')
+  deleteDocument(@CurrentUser() user: any, @Body(new ZodValidationPipe(idSchema)) dto: IdDto) {
+    return this.tax.deleteDocument(user.id, dto.id);
   }
 }
