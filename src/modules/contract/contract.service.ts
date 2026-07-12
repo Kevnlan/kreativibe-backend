@@ -1,9 +1,17 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { AiCompletionService } from '../../shared/ai-completion.service';
 import { GenerateContractDto, UpdateContractDto, SignContractDto } from './dto/contract.dto';
 
-const DEFAULT_CLAUSES = (deliverables: string[], totalAmount: number, currency: string) => [
+const CONTRACT_SYSTEM_PROMPT = `You are Kreativibe's AI contract generator for influencer marketing campaigns in East Africa.
+Given campaign details, deliverables, and agreed terms, generate contract clauses that are specific to the campaign.
+Reply with strict JSON only, no markdown, as an array of clause objects in this exact shape:
+[{"id": string, "title": string, "content": string, "required": boolean, "editable": boolean}]
+Include clauses for: scope of work, deliverables, payment terms, timeline, IP rights, confidentiality, and any campaign-specific clauses (e.g. exclusivity, content approval, usage rights, territory).
+Make each clause content specific to the campaign details provided. Do not include anything outside the JSON array.`;
+
+const FALLBACK_CLAUSES = (deliverables: string[], totalAmount: number, currency: string) => [
   { id: 'scope', title: 'Scope of Work', content: 'The Creative agrees to create and deliver social media content as outlined in the campaign brief.', required: true, editable: true },
   { id: 'deliverables', title: 'Deliverables', content: deliverables.length ? deliverables.join(', ') : 'As outlined in the campaign brief.', required: true, editable: true },
   { id: 'payment', title: 'Payment Terms', content: `Total contract value of ${totalAmount} ${currency}, payable per approved milestone.`, required: true, editable: true },
@@ -14,7 +22,12 @@ const DEFAULT_CLAUSES = (deliverables: string[], totalAmount: number, currency: 
 
 @Injectable()
 export class ContractService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ContractService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private ai: AiCompletionService,
+  ) {}
 
   private async assertBrandOwner(userId: string, campaignId: string) {
     const campaign = await this.prisma.campaign.findUnique({ where: { id: campaignId }, include: { brandProfile: true } });
@@ -75,6 +88,8 @@ export class ContractService {
       throw new NotFoundException({ message: 'Application not found for this campaign', code: 'APPLICATION_NOT_FOUND' });
     }
 
+    const clauses = await this.generateClauses(campaign, application, dto.proposedRate, dto.currency);
+
     const contract = await this.prisma.contract.create({
       data: {
         campaignId,
@@ -85,7 +100,7 @@ export class ContractService {
         endDate: campaign.endDate,
         totalAmount: dto.proposedRate,
         currency: dto.currency,
-        clauses: DEFAULT_CLAUSES(campaign.deliverables, dto.proposedRate, dto.currency),
+        clauses,
         additionalTerms: '',
         status: 'DRAFT',
       },
@@ -94,6 +109,49 @@ export class ContractService {
     await this.seedMilestones(campaignId, dto.proposedRate, dto.currency, campaign.startDate, campaign.endDate);
 
     return contract;
+  }
+
+  private async generateClauses(
+    campaign: any,
+    application: any,
+    proposedRate: number,
+    currency: string,
+  ): Promise<{ id: string; title: string; content: string; required: boolean; editable: boolean }[]> {
+    const campaignContext = {
+      title: campaign.title,
+      objective: campaign.objective,
+      description: campaign.description,
+      audience: campaign.audience,
+      platforms: campaign.platforms,
+      contentTypes: campaign.contentTypes,
+      deliverables: campaign.deliverables,
+      milestones: campaign.milestones,
+      messaging: campaign.messaging,
+      tone: campaign.tone,
+      budgetMin: campaign.budgetMin,
+      budgetMax: campaign.budgetMax,
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
+      brandName: campaign.brandProfile.companyName,
+      creatorName: application.creatorProfile.user.name,
+      proposedRate,
+      currency,
+    };
+
+    try {
+      const content = await this.ai.complete(CONTRACT_SYSTEM_PROMPT, [
+        { role: 'user', content: `Generate contract clauses for this campaign:\n${JSON.stringify(campaignContext, null, 2)}` },
+      ]);
+      const clauses = this.ai.parseJson<{ id: string; title: string; content: string; required: boolean; editable: boolean }[]>(content);
+      if (Array.isArray(clauses) && clauses.length > 0) {
+        return clauses;
+      }
+      this.logger.warn('AI returned empty clauses, using fallback');
+      return FALLBACK_CLAUSES(campaign.deliverables, proposedRate, currency);
+    } catch (err) {
+      this.logger.warn(`AI contract generation failed, using fallback: ${err}`);
+      return FALLBACK_CLAUSES(campaign.deliverables, proposedRate, currency);
+    }
   }
 
   private async findByCampaign(campaignId: string) {
