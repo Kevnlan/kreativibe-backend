@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ConflictException,
   UnauthorizedException,
   ForbiddenException,
@@ -17,6 +18,8 @@ import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -51,7 +54,11 @@ export class AuthService {
     await this.prisma.passwordReset.create({
       data: { token: verifyToken, userId: user.id, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
     });
-    await this.email.sendVerificationEmail(user.email, verifyToken);
+    try {
+      await this.email.sendVerificationEmail(user.email, verifyToken);
+    } catch (err) {
+      this.logger.error(`Failed to send verification email to ${user.email}`, err as Error);
+    }
 
     const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email, user.role);
     const profile = await this.getProfile(user.id, user.role as string);
@@ -65,13 +72,22 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException({ message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' });
     if (!user.isEmailVerified) throw new ForbiddenException({ message: 'Email not verified', code: 'EMAIL_NOT_VERIFIED' });
 
+    if (user.twoFactorEnabled) {
+      const sessionToken = this.jwt.sign(
+        { sub: user.id, type: '2fa-pending' },
+        { secret: this.config.get('JWT_ACCESS_SECRET'), expiresIn: '5m' },
+      );
+      return { requiresTwoFactor: true, sessionToken };
+    }
+
     const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email, user.role);
     const profile = await this.getProfile(user.id, user.role as string);
 
     return { user: this.sanitizeUser(user), accessToken, refreshToken, ...profile };
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken?: string) {
+    if (!refreshToken) return;
     await this.prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
   }
 
@@ -126,7 +142,7 @@ export class AuthService {
     return { user: this.sanitizeUser(user), ...profile };
   }
 
-  private async generateTokens(userId: string, email: string, role: any) {
+  async generateTokens(userId: string, email: string, role: any) {
     const accessToken = this.jwt.sign(
       { sub: userId, email, role },
       { secret: this.config.get('JWT_ACCESS_SECRET'), expiresIn: this.config.get('JWT_ACCESS_EXPIRES_IN') },
@@ -138,14 +154,14 @@ export class AuthService {
     return { accessToken, refreshToken: rawRefresh };
   }
 
-  private async getProfile(userId: string, role: string) {
+  async getProfile(userId: string, role: string) {
     if (role === 'CREATOR') {
       return { creatorProfile: await this.prisma.creatorProfile.findUnique({ where: { userId } }), brandProfile: null };
     }
     return { creatorProfile: null, brandProfile: await this.prisma.brandProfile.findUnique({ where: { userId } }) };
   }
 
-  private sanitizeUser(user: any) {
+  sanitizeUser(user: any) {
     const { passwordHash: _, ...safe } = user;
     return safe;
   }
