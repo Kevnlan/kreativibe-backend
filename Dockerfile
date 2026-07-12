@@ -1,11 +1,11 @@
 # --- Dependencies (with dev deps, for build) ---
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # --- Build ---
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -13,7 +13,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # --- Production dependencies only ---
-FROM node:20-alpine AS prod-deps
+FROM node:22-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm install prisma --no-save
@@ -21,7 +21,7 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 # --- Runtime ---
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
