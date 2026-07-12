@@ -176,6 +176,99 @@ enum ReputationPointType {
   MILESTONE
 }
 
+enum NotificationType {
+  OFFER_RECEIVED
+  OFFER_COUNTERED
+  OFFER_ACCEPTED
+  OFFER_REJECTED
+  OFFER_WITHDRAWN
+  CONTENT_APPROVED
+  CONTENT_REJECTED
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+  WITHDRAWAL_COMPLETED
+  POINTS_EARNED
+  COMMUNITY_REPLY
+  SUPPORT_UPDATE
+  CAMPAIGN_APPLICATION
+  MILESTONE_APPROVED
+  MILESTONE_REJECTED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  ACCOUNT
+  PAYMENT
+  CONTENT
+  CAMPAIGN
+  TECHNICAL
+  OTHER
+}
+
+enum CommunityPostType {
+  DISCUSSION
+  QUESTION
+  SHOWCASE
+  FEEDBACK
+}
+
+enum AnalyticsMetricType {
+  VIEWS
+  LIKES
+  COMMENTS
+  SHARES
+  SAVES
+  IMPRESSIONS
+  REACH
+  ENGAGEMENT_RATE
+}
+
+enum AuditAction {
+  USER_BANNED
+  USER_SUSPENDED
+  USER_REINSTATED
+  USER_VERIFIED
+  USER_VERIFICATION_REVOKED
+  CONTENT_REMOVED
+  CONTENT_FEATURED
+  CONTENT_UNFEATURED
+  LICENSE_REVOKED
+  COMMISSION_RATE_CHANGED
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+  SYSTEM_CONFIG_UPDATED
+  MODERATION_RULE_CREATED
+  MODERATION_RULE_UPDATED
+  MODERATION_RULE_DELETED
+}
+
+enum ReviewEntityType {
+  CREATOR
+  BRAND
+  CONTENT
+}
+
+enum EmailFrequency {
+  INSTANT
+  DAILY
+  WEEKLY
+  NEVER
+}
+
 // ─── Module 1 — Country ───────────────────────────────────────────────────────
 
 model Country {
@@ -215,12 +308,22 @@ model User {
   twoFactorEnabledAt DateTime?
   backupCodes        String[] // hashed backup codes; consumed (removed) on use
 
-  creatorProfile CreatorProfile?
-  brandProfile   BrandProfile?
-  refreshTokens  RefreshToken[]
-  passwordResets PasswordReset[]
-  wallet         Wallet?
-  socialAccounts SocialAccount[]
+  creatorProfile    CreatorProfile?
+  brandProfile      BrandProfile?
+  refreshTokens     RefreshToken[]
+  passwordResets    PasswordReset[]
+  wallet            Wallet?
+  socialAccounts    SocialAccount[]
+  notifications     Notification[]
+  supportTickets    SupportTicket[]     @relation("TicketRequester")
+  assignedTickets   SupportTicket[]     @relation("TicketAgent")
+  ticketMessages    TicketMessage[]
+  communityPosts    CommunityPost[]
+  communityComments CommunityComment[]
+  auditLogs         AuditLog[]
+  reviewsGiven      Review[]            @relation("ReviewReviewer")
+  reviewsReceived   Review[]            @relation("ReviewSubject")
+  userSettings      UserSettings?
 
   @@index([email])
   @@index([role])
@@ -294,6 +397,7 @@ model CreatorProfile {
   achievements       CreatorAchievement[]
   lessonCompletions  LessonCompletion[]
   courseCertificates CourseCertificate[]
+  analyticsSnapshots AnalyticsSnapshot[]
 
   @@map("creator_profiles")
 }
@@ -371,6 +475,8 @@ model BrandProfile {
   linkedin            String?            @db.VarChar(100)
   isVerified          Boolean            @default(false)
   verificationStatus  VerificationStatus @default(PENDING)
+  averageRating       Float              @default(0)
+  totalReviews        Int                @default(0)
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
@@ -552,6 +658,7 @@ model Offer {
 
   events  OfferEvent[]
   license ContentLicense?
+  reviews Review[]
 
   @@index([contentId])
   @@index([brandProfileId])
@@ -613,6 +720,8 @@ model Campaign {
   proposals      Proposal[]
   campaignMilestones CampaignMilestone[]
   contract       Contract?
+  analyticsSnapshots AnalyticsSnapshot[]
+  reviews            Review[]
 
   @@index([brandProfileId])
   @@index([status])
@@ -1056,6 +1165,8 @@ model PublishedPost {
   brand    String?             @db.VarChar(200)
   postedAt DateTime            @default(now())
 
+  analyticsSnapshots AnalyticsSnapshot[]
+
   @@index([creatorProfileId])
   @@map("published_posts")
 }
@@ -1155,4 +1266,217 @@ model BestPracticeExample {
 
   @@index([niche])
   @@map("best_practice_examples")
+}
+
+// ─── Module — Notifications ───────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  body      String           @db.VarChar(1000)
+  data      Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ─── Module — Customer Support ────────────────────────────────────────────────
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  subject     String         @db.VarChar(200)
+  description String         @db.VarChar(2000)
+  category    TicketCategory @default(OTHER)
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+
+  requesterId String
+  requester   User           @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  assignedAgentId String?
+  assignedAgent   User?      @relation("TicketAgent", fields: [assignedAgentId], references: [id])
+
+  slaDeadline  DateTime?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  rating       Int? // 1-5 customer satisfaction
+  ratingComment String? @db.VarChar(500)
+
+  messages TicketMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([requesterId])
+  @@index([assignedAgentId])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body      String   @db.VarChar(2000)
+  attachments String[]
+  isInternal Boolean  @default(false) // agent-only internal notes
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+// ─── Module — Community ───────────────────────────────────────────────────────
+
+model CommunityPost {
+  id        String            @id @default(cuid())
+  authorId  String
+  author    User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  type      CommunityPostType @default(DISCUSSION)
+  title     String            @db.VarChar(200)
+  body      String            @db.VarChar(5000)
+  tags      String[]
+  mediaUrls String[]
+  isPinned  Boolean           @default(false)
+  isLocked  Boolean           @default(false)
+  upvotes   Int               @default(0)
+  downvotes Int               @default(0)
+  views     Int               @default(0)
+
+  comments CommunityComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, createdAt])
+  @@index([authorId])
+  @@map("community_posts")
+}
+
+model CommunityComment {
+  id        String        @id @default(cuid())
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String        @db.VarChar(2000)
+  parentId  String? // for replies to comments
+  parent    CommunityComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   CommunityComment[] @relation("CommentReplies")
+  upvotes   Int           @default(0)
+  downvotes Int           @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+  @@map("community_comments")
+}
+
+// ─── Module — Analytics ───────────────────────────────────────────────────────
+
+model AnalyticsSnapshot {
+  id              String             @id @default(cuid())
+  publishedPostId String?
+  publishedPost   PublishedPost?     @relation(fields: [publishedPostId], references: [id], onDelete: Cascade)
+  creatorProfileId String?
+  creatorProfile  CreatorProfile?    @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+  campaignId      String?
+  campaign        Campaign?          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  metricType      AnalyticsMetricType
+  platform        ContentPlatform?
+  value           Int
+  snapshotDate    DateTime
+  createdAt       DateTime           @default(now())
+
+  @@index([creatorProfileId, snapshotDate])
+  @@index([campaignId, snapshotDate])
+  @@index([publishedPostId, snapshotDate])
+  @@map("analytics_snapshots")
+}
+
+// ─── Module — Audit Log ───────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  actor      User        @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  action     AuditAction
+  entityType String      @db.VarChar(50) // "User", "Content", "Offer", "Withdrawal", etc.
+  entityId   String      @db.VarChar(100)
+  metadata   Json?
+  ipAddress  String?     @db.VarChar(45)
+  createdAt  DateTime    @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ─── Module — Reviews & Ratings ───────────────────────────────────────────────
+
+model Review {
+  id           String            @id @default(cuid())
+  reviewerId   String
+  reviewer     User              @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  subjectId    String            @db.VarChar(100) // userId, contentId, etc.
+  subjectType  ReviewEntityType
+  subject      User              @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  campaignId   String?
+  campaign     Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  offerId      String?
+  offer        Offer?            @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  rating       Int               // 1-5
+  title        String?           @db.VarChar(200)
+  body         String?           @db.VarChar(2000)
+  response     String?           @db.VarChar(2000)
+  respondedAt  DateTime?
+  isPublic     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([subjectId, subjectType])
+  @@index([reviewerId])
+  @@map("reviews")
+}
+
+// ─── Module — User Settings ───────────────────────────────────────────────────
+
+model UserSettings {
+  id                     String         @id @default(cuid())
+  userId                 String         @unique
+  user                   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Notification preferences
+  emailFrequency         EmailFrequency @default(INSTANT)
+  pushEnabled            Boolean        @default(true)
+  smsEnabled             Boolean        @default(false)
+  notificationTypes      String[]       @default([]) // empty = all enabled; otherwise list of enabled types
+
+  // Privacy
+  profileVisible         Boolean        @default(true)
+  showEarnings           Boolean        @default(false)
+  allowDirectMessages    Boolean        @default(true)
+  showInSearch           Boolean        @default(true)
+
+  // Preferences
+  preferredLanguage      String         @default("en") @db.VarChar(10)
+  preferredCurrency      String         @default("KES") @db.VarChar(5)
+  timezone               String         @default("Africa/Nairobi") @db.VarChar(50)
+
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@map("user_settings")
 }

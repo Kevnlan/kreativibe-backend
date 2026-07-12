@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { ListContentDto } from './dto/list-content.dto';
@@ -15,7 +16,10 @@ const present = <T extends { status: ContentStatus }>(content: T) => ({ ...conte
 
 @Injectable()
 export class ContentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private moderation: ModerationService,
+  ) {}
 
   private async creatorProfileId(userId: string) {
     const profile = await this.prisma.creatorProfile.findUniqueOrThrow({ where: { userId } });
@@ -104,6 +108,11 @@ export class ContentService {
         status,
       },
     });
+
+    if (status === 'SUBMITTED') {
+      await this.moderation.autoCreateEntry(created.id);
+    }
+
     return present(created);
   }
 

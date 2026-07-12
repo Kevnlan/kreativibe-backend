@@ -23,6 +23,17 @@ import { ReputationModule } from './modules/reputation/reputation.module';
 import { EducationModule } from './modules/education/education.module';
 import { EarningsModule } from './modules/earnings/earnings.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { OfferModule } from './modules/offer/offer.module';
+import { ModerationModule } from './modules/moderation/moderation.module';
+import { LicenseModule } from './modules/license/license.module';
+import { NotificationModule } from './modules/notification/notification.module';
+import { SupportModule } from './modules/support/support.module';
+import { CommunityModule } from './modules/community/community.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { ReviewModule } from './modules/review/review.module';
+import { SearchModule } from './modules/search/search.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -51,6 +62,17 @@ import configuration from './config/configuration';
     EducationModule,
     EarningsModule,
     DashboardModule,
+    OfferModule,
+    ModerationModule,
+    LicenseModule,
+    NotificationModule,
+    SupportModule,
+    CommunityModule,
+    AnalyticsModule,
+    AdminModule,
+    ReviewModule,
+    SearchModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}
