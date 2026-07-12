@@ -10,9 +10,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     private prisma: PrismaService,
   ) {
+    const secret = config.get<string>('JWT_ACCESS_SECRET');
+    if (!secret) throw new Error('JWT_ACCESS_SECRET is not set');
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: config.get<string>('JWT_ACCESS_SECRET'),
+      secretOrKey: secret,
     });
   }
 
