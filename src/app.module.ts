@@ -34,6 +34,10 @@ import { AdminModule } from './modules/admin/admin.module';
 import { ReviewModule } from './modules/review/review.module';
 import { SearchModule } from './modules/search/search.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
+import { BookingModule } from './modules/booking/booking.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -73,6 +77,10 @@ import configuration from './config/configuration';
     ReviewModule,
     SearchModule,
     SettingsModule,
+    MessagingModule,
+    BookingModule,
+    SubscriptionModule,
+    AiAssistantModule,
   ],
 })
 export class AppModule {}

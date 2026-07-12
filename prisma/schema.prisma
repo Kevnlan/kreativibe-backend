@@ -269,6 +269,74 @@ enum EmailFrequency {
   NEVER
 }
 
+// ─── Phase 5 Enums ───────────────────────────────────────────────────────────
+
+enum ConversationType {
+  DIRECT
+  CAMPAIGN
+  SUPPORT
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DECLINED
+  RESCHEDULED
+}
+
+enum BookingType {
+  CONTENT_CREATION
+  CAMPAIGN_COLLAB
+  CONSULTATION
+  MEET_AND_GREET
+  OTHER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum AiChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum AiAssistantType {
+  CAMPAIGN_BUILDER
+  CONTENT_SUGGESTIONS
+  PRICING_ADVISOR
+  CREATOR_MATCH
+  GENERAL
+}
+
 // ─── Module 1 — Country ───────────────────────────────────────────────────────
 
 model Country {
@@ -324,6 +392,16 @@ model User {
   reviewsGiven      Review[]            @relation("ReviewReviewer")
   reviewsReceived   Review[]            @relation("ReviewSubject")
   userSettings      UserSettings?
+
+  // Phase 5 relations
+  conversationsInitiated Conversation[]   @relation("ConversationInitiator")
+  conversationsReceived  Conversation[]   @relation("ConversationRecipient")
+  messages               Message[]
+  bookingsAsCreator      Booking[]        @relation("BookingCreator")
+  bookingsAsBrand        Booking[]        @relation("BookingBrand")
+  subscriptions          Subscription[]
+  invoices               Invoice[]
+  aiChatSessions         AiChatSession[]
 
   @@index([email])
   @@index([role])
@@ -1479,4 +1557,177 @@ model UserSettings {
   updatedAt              DateTime       @updatedAt
 
   @@map("user_settings")
+}
+
+// ─── Phase 5 — Messaging ──────────────────────────────────────────────────────
+
+model Conversation {
+  id              String           @id @default(cuid())
+  type            ConversationType @default(DIRECT)
+  initiatorId     String
+  initiator       User             @relation("ConversationInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  recipientId     String
+  recipient       User             @relation("ConversationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  campaignId      String?
+  lastMessageAt   DateTime?
+  lastMessageText String?          @db.VarChar(500)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  messages Message[]
+
+  @@index([initiatorId])
+  @@index([recipientId])
+  @@map("conversations")
+}
+
+model Message {
+  id              String        @id @default(cuid())
+  conversationId  String
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body            String        @db.VarChar(2000)
+  attachments     Json?
+  status          MessageStatus @default(SENT)
+  readAt          DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// ─── Phase 5 — Bookings & Calendar ────────────────────────────────────────────
+
+model Booking {
+  id              String        @id @default(cuid())
+  creatorId       String
+  creator         User          @relation("BookingCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  brandId         String
+  brand           User          @relation("BookingBrand", fields: [brandId], references: [id], onDelete: Cascade)
+  campaignId      String?
+  type            BookingType   @default(CONTENT_CREATION)
+  title           String        @db.VarChar(200)
+  description     String?       @db.VarChar(2000)
+  status          BookingStatus @default(PENDING)
+  startDate       DateTime
+  endDate         DateTime
+  timezone        String        @default("Africa/Nairobi") @db.VarChar(50)
+  location        String?       @db.VarChar(200)
+  meetingLink     String?       @db.VarChar(500)
+  price           Decimal?      @db.Decimal(12, 2)
+  currency        String        @default("KES") @db.VarChar(5)
+  notes           String?       @db.VarChar(2000)
+  cancellationReason String?    @db.VarChar(500)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([creatorId])
+  @@index([brandId])
+  @@index([status])
+  @@index([startDate])
+  @@map("bookings")
+}
+
+// ─── Phase 5 — Subscriptions & Invoicing ──────────────────────────────────────
+
+model SubscriptionPlan {
+  id              String        @id @default(cuid())
+  name            String        @db.VarChar(100)
+  description     String?       @db.VarChar(500)
+  tier            String        @db.VarChar(50) // "CREATOR_PRO", "BRAND_PRO", "ENTERPRISE"
+  price           Decimal       @db.Decimal(10, 2)
+  currency        String        @default("KES") @db.VarChar(5)
+  billingCycle    BillingCycle  @default(MONTHLY)
+  trialDays       Int           @default(0)
+  features        Json?
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  subscriptions   Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId          String
+  plan            SubscriptionPlan    @relation(fields: [planId], references: [id])
+  status          SubscriptionStatus  @default(ACTIVE)
+  startDate       DateTime
+  endDate         DateTime?
+  trialEndDate    DateTime?
+  cancelledAt     DateTime?
+  cancellationReason String?          @db.VarChar(500)
+  autoRenew       Boolean             @default(true)
+  externalRef     String?             @db.VarChar(200) // Stripe subscription ID, etc.
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  invoices        Invoice[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id              String          @id @default(cuid())
+  subscriptionId  String?
+  subscription    Subscription?   @relation(fields: [subscriptionId], references: [id])
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  number          String          @unique @db.VarChar(50)
+  amount          Decimal         @db.Decimal(12, 2)
+  currency        String          @default("KES") @db.VarChar(5)
+  tax             Decimal         @default(0) @db.Decimal(12, 2)
+  total           Decimal         @db.Decimal(12, 2)
+  status          InvoiceStatus   @default(DRAFT)
+  dueDate         DateTime
+  paidAt          DateTime?
+  items           Json?
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("invoices")
+}
+
+// ─── Phase 5 — AI Assistant ───────────────────────────────────────────────────
+
+model AiChatSession {
+  id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            AiAssistantType  @default(GENERAL)
+  title           String?          @db.VarChar(200)
+  context         Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  messages        AiChatMessage[]
+
+  @@index([userId])
+  @@map("ai_chat_sessions")
+}
+
+model AiChatMessage {
+  id              String       @id @default(cuid())
+  sessionId       String
+  session         AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role            AiChatRole
+  content         String       @db.VarChar(4000)
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([sessionId])
+  @@map("ai_chat_messages")
 }
